@@ -178,7 +178,5 @@ openclaw memory status --json | jq -r '.[0].status.backend'
 
 ## 五、相关文档与脚本
 
-- **实现原理与案例**：`doc/sum/MEMORY机制实现原理.md`
-- **机制总结与配置示例**：`doc/sum/MEMORY机制总结.md`
-- **切换与验证命令速查**：`doc/scripts/memory-切换与验证命令.md`（见下）
+- **实现原理与案例**：`doc/sum/MEMORY机制总览与验证实践.md`
 - **脚本**：`doc/scripts/memory-switch.sh` 可用于切换 backend 并可选重启。
