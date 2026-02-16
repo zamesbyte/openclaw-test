@@ -1,0 +1,10 @@
+# Sensitive credentials - NEVER COMMIT
+doc/feishu-credentials.txt
+**/feishu-credentials.txt
+**/*credentials*.txt
+*.secret
+.env
+.env.*
+
+# macOS
+.DS_Store
