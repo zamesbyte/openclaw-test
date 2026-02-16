@@ -89,6 +89,48 @@ openclaw security audit --deep
 
 Gateway 是 OpenClaw 的长驻服务，负责接受 UI/前端请求、调用模型与 Agent。
 
+### 3.0 Gateway 地址到底是什么？
+
+- **Web 控制台 / Dashboard 地址（HTTP）**  
+  - 默认：`http://127.0.0.1:18789/`（或 `http://localhost:18789/`）  
+  - 用途：在浏览器里打开「Gateway Dashboard / Control UI」。
+- **Gateway WebSocket 地址（WS）**  
+  - 默认：`ws://127.0.0.1:18789`  
+  - 用途：Control UI、Nodes、工具客户端等通过这个地址与 Gateway 通信。
+
+你截图里访问的是类似 `http://localhost:18789/overview`，页面右上角提示：
+
+- `unauthorized (1008): unauthorized: gateway token mismatch (open the dashboard URL and paste the token in Control UI settings)`
+
+这不是“地址错了”，而是**认证 token 不匹配**：
+
+- Gateway 端要求一个 token（`gateway.auth.token` 或 `OPENCLAW_GATEWAY_TOKEN`）；  
+- 控制台 UI 里保存的是另一个 token，于是握手失败就报 1008。
+
+**修复方式：**
+
+1. 推荐执行一次：
+
+   ```bash
+   openclaw dashboard
+   ```
+
+   这个命令会自动打开带 `?token=...` 的正确 URL，例如：  
+   `http://127.0.0.1:18789/?token=<gateway-token>`，并把 token 写入浏览器的本地存储。
+
+2. 或者手动：
+
+   - 在终端查出当前 Gateway 的 token：
+
+     ```bash
+     openclaw config get gateway.auth.token
+     ```
+
+   - 在浏览器打开 `http://127.0.0.1:18789/`，点击右上角设置，把这个 token 粘贴到「Gateway Token」输入框保存；
+   - 刷新页面，`Health` 应从 `Offline` 变为绿色 `Online`，`Status` 变为 `Connected`。
+
+之后，无论你是打开 `http://localhost:18789/` 还是 `http://localhost:18789/overview`，只要浏览器里保存的 token 和 `gateway.auth.token` 一致，就可以正常使用，不再出现 1008 报错。
+
 ### 3.1 启动 / 停止 / 重启 / 状态
 
 - **启动网关**
