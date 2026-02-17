@@ -201,6 +201,75 @@ openclaw browser --browser-profile openclaw snapshot
   - `hooks.mappings[0].channel = "feishu"`
   - `hooks.mappings[0].to = "ou_fc69cb46e0574b061b5cde6c3bf3b159"`
 
+### 5.5 Obsidian 集成（Obsidian vault 写入目录）
+
+通过 Obsidian 相关 Skill（`openclaw-src/skills/obsidian/SKILL.md`）时，OpenClaw 并不直接决定笔记存放位置，而是**复用 Obsidian 自己的 vault 设置**：
+
+- Obsidian 官方配置文件：`~/Library/Application Support/obsidian/obsidian.json`  
+- 该文件中记录所有 vault 的路径与是否打开，例如本机当前内容大致为：
+
+  ```json
+  {
+    "vaults": {
+      "d1f947af2404a6b3": {
+        "path": "/Users/zhanlifeng/Documents/markdown/md-doc",
+        "open": true
+      }
+    }
+  }
+  ```
+
+- Obsidian vault 本质上是一个普通文件夹：
+  - Markdown 笔记：`*.md`
+  - Vault 内部配置：`.obsidian/`
+  - 其他附件：你在 Obsidian 设置里指定的路径
+
+**结论（当前环境）：**
+
+- 当 OpenClaw 借助 `obsidian-cli` 操作 Obsidian 时，实际写入/读取的 Markdown 文件目录为：  
+  **`/Users/zhanlifeng/Documents/markdown/md-doc`**  
+  （即 Obsidian 当前 `open: true` 的 vault 路径）。
+- 若你在 Obsidian 中切换默认 vault，或运行 `obsidian-cli set-default ...`，OpenClaw 通过 obsidian-cli 再次查询时就会指向新的 vault 目录。
+
+### 5.6 Skills 目录与查找规则
+
+OpenClaw 使用 AgentSkills 兼容的 `SKILL.md` 文件来为 Agent 提供“使用说明 + Slash 命令”，技能加载有三类位置与优先级：
+
+- **工程内技能（workspace skills）**
+  - 路径：项目内的 `./skills/`（如果存在）  
+  - 用途：只对当前工程/Agent 生效，通常放你自己写的或从 ClawHub 安装的技能。
+
+- **OpenClaw 内置技能（bundled skills）**
+  - 本仓库源码中的位置：`openclaw-src/skills/*/SKILL.md`  
+    - 例如：Obsidian Skill 文档在：`openclaw-src/skills/obsidian/SKILL.md`
+  - 安装后的实际运行时版本位于全局 npm 安装目录（不用手动改），OpenClaw 会自动加载。
+
+- **插件提供的 Skills（以飞书插件为例）**
+  - 飞书相关技能不在顶层 `openclaw-src/skills`，而是在扩展插件目录下：
+    - 根目录：`openclaw-src/extensions/feishu/skills/`
+    - 具体飞书技能：
+      - `openclaw-src/extensions/feishu/skills/feishu-doc/SKILL.md`
+      - `openclaw-src/extensions/feishu/skills/feishu-drive/SKILL.md`
+      - `openclaw-src/extensions/feishu/skills/feishu-perm/SKILL.md`
+      - `openclaw-src/extensions/feishu/skills/feishu-wiki/SKILL.md`
+  - 这些技能在 Dashboard 的 **Skills** 页面会显示在「EXTRA SKILLS」区域，受对应插件启用状态控制。
+
+- **本地共享技能（managed/local skills）**
+  - 路径：`~/.openclaw/skills/`  
+  - 特点：同一台机器上所有 Agent 共享，可用于通用型技能包。
+
+加载优先级（同名 Skill 冲突时）：
+
+1. 工程内 `./skills`（最高）  
+2. 本地共享 `~/.openclaw/skills`  
+3. 内置 `openclaw-src/skills`（最低）
+
+你可以：
+
+- 在当前工程目录下使用 `clawhub install <skill-name>` 将技能装入 `./skills`；
+- 或直接在 `~/.openclaw/skills` 下维护一套个人常用技能；
+- 所有技能的格式与配置细节可参考内置示例，例如 Obsidian：`openclaw-src/skills/obsidian/SKILL.md`。
+
 ---
 
 ## 6. 典型排错路径（CLI / 配置）

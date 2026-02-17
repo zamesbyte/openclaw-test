@@ -126,6 +126,11 @@
 > - 不同模型、不同 Agent 怎么做差异化授权？  
 > - 每类工具典型用在什么场景？
 
+
+
+邮件发送tools
+![[Image_2026-02-17_21-58-25_531lso1y.jcm.png]]
+
 ### 2.1 工具总开关：tools.allow / tools.deny / profile
 
 - **应用场景**
