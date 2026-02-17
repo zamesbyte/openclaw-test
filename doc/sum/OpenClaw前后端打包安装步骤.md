@@ -132,8 +132,60 @@ openclaw --version && curl -sS -o /dev/null -w "Dashboard HTTP: %{http_code}\n" 
 
 ---
 
-## 六、相关文档
+## 六、源码目录 / 运行目录 / 全局 CLI 的关系（精简版）
 
-- [飞书发邮件到Gmail故障修复](./飞书发邮件到Gmail故障修复.md) — Dashboard 与 Control UI 相关说明、打包安装简述
-- [Gmail配置为OpenClaw专属Channel](./Gmail配置为OpenClaw专属Channel.md) — 配置与渠道
+在这份打包文档里，经常会提到三个「长得很像但完全不同」的路径：
+
+- **源码目录**：你修改 TypeScript 源码和运行 `pnpm build/pack` 的地方  
+  例如：`/Users/zhanlifeng/Documents/workspace/openclaw/openclaw-src`
+- **运行时数据目录**：OpenClaw 实际读写配置、记忆、会话的地方  
+  例如：`~/.openclaw`（里面有 `openclaw.json`、`agents/`、`workspace/`、`memory/` 等）
+- **全局 `openclaw` 命令**：终端里直接敲的 `openclaw` 可执行文件  
+  位置可通过 `which openclaw` 查看，来自你用 pnpm 全局安装的 tgz 包
+
+理解要点：
+
+- 你在 `openclaw-src/src/...` 改的代码，只会影响 **之后从该源码做的构建（dist 和 tgz）**；
+- `~/.openclaw` 里的配置/记忆不会因构建而被覆盖，只是被新版本 CLI 读取；
+- 只有当你用 `pnpm add -g ./openclaw-xxxx.tgz` 安装后，终端里的 `openclaw` 才会换成你这次构建的版本。
+
+---
+
+## 七、只在本地用源码构建版本（不覆盖全局安装）
+
+有时你只想验证本地改动（例如 MEMORY 或 hooks 行为），不想立刻替换系统里全局的 `openclaw`。可以按下面方式「本地运行」：
+
+1. 在源码目录构建一次：
+
+```bash
+cd /Users/zhanlifeng/Documents/workspace/openclaw/openclaw-src
+pnpm build
+```
+
+2. 用 **源码目录内的构建结果** 运行 CLI：
+
+```bash
+cd /Users/zhanlifeng/Documents/workspace/openclaw/openclaw-src
+
+# 查看版本（使用本地 dist）
+pnpm openclaw -- --version
+
+# 查看配置
+pnpm openclaw -- config get hooks.gmail
+
+# 用本地构建执行 agent
+pnpm openclaw -- agent --agent main --local --message "测试本地构建是否生效"
+```
+
+特点：
+
+- 代码来自你刚才 `pnpm build` 生成的 `dist/`；
+- 配置 / 记忆仍然是 `~/.openclaw` 里的那一套；
+- 不影响全局已安装的 `openclaw` 命令，适合做局部实验。
+
+---
+
+## 八、相关文档
+
+- Gmail 集成与 Webhook：`doc/sum/Gmail集成一站式（Webhook收信通知飞书+发信）.md`
 - 官方文档：Control UI / 安装与更新（见 openclaw-src 仓库内 `docs/`）
