@@ -281,8 +281,14 @@ OpenClaw 使用 AgentSkills 兼容的 `SKILL.md` 文件来为 Agent 提供“使
    - `openclaw gateway status` 看日志路径；  
    - 打开当天 `/tmp/openclaw/openclaw-YYYY-MM-DD.log`；
    - 结合 `openclaw doctor --fix` 与 `openclaw gateway restart`。
-3. **浏览器相关问题**  
+3. **访问 127.0.0.1:18789 显示 “Not Found”**  
+   - 多半是 Control UI 未构建。在 `openclaw-src` 下执行：`pnpm ui:build`；  
+   - 再执行：`openclaw gateway restart`；  
+   - 用 `openclaw dashboard` 打开或复制带 token 的链接。
+4. **浏览器相关问题**  
    - 参考：`doc/sum/飞书浏览器控制与工具调用总结.md`。
-4. **Gmail 收信无通知**  
+5. **Gmail 收信无通知**  
    - 参考：`doc/sum/Gmail集成一站式（Webhook收信通知飞书+发信）.md` 的故障排查章节。
+6. **Gemini CLI / Cursor CLI 工具与验证**  
+   - 参考：`doc/sum/OpenClaw集成Gemini-CLI与Cursor-CLI验证总结.md`。
 

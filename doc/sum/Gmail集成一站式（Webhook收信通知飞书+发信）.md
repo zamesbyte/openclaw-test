@@ -94,6 +94,27 @@ openclaw webhooks gmail setup \
 openclaw gateway restart
 ```
 
+> **注意**：`trycloudflare.com` 为临时隧道，**重启或退出 cloudflared 后 URL 会变**，需用新 URL 再执行一次 setup。长期使用建议 Tailscale 或自建命名隧道。
+
+### 3.3 本地服务内网穿透一键脚本（推荐）
+
+可直接执行脚本完成「公网可达 + Gmail setup」：
+
+```bash
+# 优先 Tailscale，若未运行则自动用 cloudflared
+bash doc/sum/scripts/gmail-push-expose.sh
+
+# 仅用 Tailscale（需已 tailscale up）
+bash doc/sum/scripts/gmail-push-expose.sh tailscale
+
+# 仅用 cloudflared（会后台启动隧道并执行 setup）
+bash doc/sum/scripts/gmail-push-expose.sh cloudflared
+```
+
+脚本会：读取 `hooks.gmail.account`；若选 Tailscale 则执行 `openclaw webhooks gmail setup --account <Gmail>`；若选 cloudflared 则启动隧道、解析 trycloudflare URL、执行 setup 并写入当前 pushToken。执行完成后按提示执行 `openclaw gateway restart`。
+
+飞书/Discord 消息失败、发信与 Gmail→飞书 的更多根因与验证见：`doc/sum/通道故障诊断与修复.md`（第八、九节）。
+
 ---
 
 ## 4. 配置“收到邮件就发飞书通知”
@@ -208,26 +229,97 @@ openclaw logs --max-bytes 200000 | grep -E "gmail-watcher|hook:gmail:|\\[feishu\
 前置条件：
 - 本机 `gog` 已授权（`gog auth list`）
 - 配置 `hooks.gmail.account` 为发件账号（通常与收信 watch 使用同一账号）
+- 使用的 Agent 的 **tools.profile** 需包含 `gmail_send` 或 `group:messaging`（否则 Agent 不会调用发信工具）
 
 验证方式：
-- 在飞书里对机器人说：让它调用 `gmail_send` 发一封测试邮件到你的邮箱
-- 或在本机用 `openclaw agent --local` 指令让 Agent 调用 `gmail_send`
+- **飞书**：对机器人说「给我邮箱发个测试邮件，地址：xxx@gmail.com」，若该 Agent 的 **tools.allow** 含 `gmail_send`（或 `group:messaging`）会直接发信。
+- **本机 CLI**：`openclaw agent --agent main --message "给我邮箱发个测试邮件，地址：lifeng.zhan90@gmail.com"`（或 `--agent shop-hunter`，需该 agent 已配置 `tools.allow` 含 `gmail_send`）。
+- **未开放 gmail_send 时**：在 `~/.openclaw/openclaw.json` 的对应 agent（如 `agents.list` 中 id 为 `shop-hunter` 或 `main` 的项）的 `tools.allow` 数组中增加 `"gmail_send"`，保存后执行 `openclaw gateway restart`，新会话会带上该工具。也可用 gog 直接验证：`gog gmail send --to <收件人> --subject "测试" --body "正文"`。
+
+### 7.1 Dashboard Chat（agent:main:main）与 main agent
+
+Control UI 的默认会话是 **`agent:main:main`**，若配置里没有 id 为 **main** 的 agent，则不会解析到任何 agent 的 tools，发信能力可能不可用。
+
+**根因与正确配置：**
+
+- Dashboard Chat 使用会话 `agent:main:main`。工具列表先按 **profile**（如 `coding`）过滤，再按 agent 的 allow/deny 过滤。**profile "coding" 的 allow 里没有 `gmail_send`（属于 group:messaging）**，因此仅写 `tools.allow: ["gmail_send"]` 时，`gmail_send` 会在 profile 阶段就被滤掉，模型拿不到该工具。
+- 正确做法：在对应 agent 的 `tools` 里使用 **`tools.alsoAllow`**，在 profile 阶段把 `gmail_send` 加进允许列表。配置不允许同一层同时写 `allow` 和 `alsoAllow`，因此用 **`profile: "coding"` + `alsoAllow: ["browser", "gmail_send"]`**（不再单独写 `allow`），例如：
+  ```json
+  "tools": {
+    "profile": "coding",
+    "alsoAllow": ["browser", "gmail_send"],
+    "deny": ["group:runtime", "nodes", "cron", "gateway"]
+  }
+  ```
+- 在 `agents.list` 中需有 id 为 `main` 的 agent（供 `agent:main:main` 解析），且其 `tools` 按上方式包含 `gmail_send`。
+
+**验证**：在 Dashboard Chat（会话 `agent:main:main`）或 CLI（`openclaw agent --agent main -m "请给我的邮箱发一封测试邮件, 主题和内容自拟, 收件人: xxx@gmail.com"`）中发起发信请求，Agent 应调用 `gmail_send` 并实际发信。
 
 ---
 
 ## 8. 故障排查（最常见）
 
+### 8.1 收到邮件后仍然没有飞书推送（按顺序做）
+
+**① 先确认「OpenClaw 侧」是否正常**
+
+不依赖真实 Gmail 收信，直接模拟 Hook，看飞书能否收到：
+
+```bash
+bash doc/sum/scripts/verify-gmail-hook-to-feishu.sh
+```
+
+- 若脚本报 [OK]、且飞书里能看到「Gmail→飞书 链路测试」消息 → OpenClaw 配置与投递正常，问题在 **②**。
+- 若飞书收不到 → 检查 `hooks.mappings` 里 Gmail 的 `channel: "feishu"`、`to: "ou_xxx"`（你的 open_id）、`deliver: true`，以及 `openclaw channels resolve` 拿到的 open_id 是否一致。
+
+**② 再确认「Google Push 能到本机」（根因多在此处）**
+
+Gmail 新邮件是靠 **Google Cloud Pub/Sub 往你本机推** 才会触发 Hook；推不到就永远不会触发。若配置里 **`hooks.gmail.tailscale.mode` 为 `off`** 且未配置 `--push-endpoint`，则当前注册的 push 地址很可能是不可达的，真实收信不会触发。
+
+- **Tailscale（推荐）**：  
+  ```bash
+  tailscale status   # 确认已登录（若未登录则 tailscale up）
+  openclaw webhooks gmail setup --account 你的Gmail@gmail.com
+  openclaw gateway restart
+  ```  
+  会注册/续期 Gmail Watch，并**把 Pub/Sub 的 push endpoint 设为你的 Tailscale Funnel 公网 URL**，Google 才能推到你本机。若此前用 `--tailscale off` 跑过 setup，需要**重新跑一次**（不传 `--tailscale off`）以更新 endpoint。
+- **不用 Tailscale**：必须用 **cloudflared** 等隧道，把公网 URL 暴露到本机 `gog gmail watch serve` 监听的端口（默认 8788），并用 `--push-endpoint` 执行 setup（见 3.2 方案 B）。
+
+**③ 看日志确认 Push 是否到达**
+
+```bash
+openclaw logs --max-bytes 200000 | grep -E "gmail-watcher|gog.*gmail|hooks/gmail|hook:gmail|feishu.*sent"
+```
+
+- 有 `gmail watcher started`、`[gog]` 收到请求、`hooks/gmail` 或 `hook:gmail:` → Push 已到，再查 mapping/飞书 to。
+- 完全没有 gmail/hook 相关 → Push 没到本机，回到 ② 检查 Tailscale/隧道和 `openclaw webhooks gmail setup`。
+
+### 8.2 深度诊断（逐环检查）
+
+不只看状态，从**根本**上逐环验证整条链路，可运行：
+
+```bash
+bash doc/sum/scripts/diagnose-gmail-to-feishu.sh
+```
+
+脚本会依次检查：① `hooks.gmail` 配置（account、topic、pushToken、tailscale）；② 公网 Push 是否可达（Tailscale/cloudflared）；③ Gateway 与 8788 端口（gog serve 是否在监听）；④ 模拟 Hook→飞书 是否成功；⑤ 近期日志中是否有 watcher/Hook/飞书发送。根据输出定位断点并按 8.1 修复。
+
+### 8.3 其它常见问题
+
 | 现象 | 结论 | 处理 |
 |------|------|------|
-| 收到邮件但飞书没通知 | 多数是 watcher 未启动 / push 没到本机 | `openclaw logs` 查 `gmail watcher not started: gmail topic required`；重新跑 `openclaw webhooks gmail setup` |
-| `gmail watcher not started: gmail topic required` | 缺 `hooks.gmail.topic` | 说明 setup 未完成 |
-| 需要公网 push 但 Tailscale 起不来 | 无公网入口 | 用 cloudflared 备选方案 |
-| 端口 8788 占用 | serve 起不来 | 关闭重复的 `gog gmail watch serve`/`openclaw webhooks gmail run` |
+| 收到邮件但飞书没通知 | 多数是 push 没到本机 | 先跑 8.1 ① 再跑 8.2 诊断脚本，按 8.1 ②③ 修复 |
+| `gmail watcher not started: gmail topic required` | 缺 `hooks.gmail.topic` | 执行 `openclaw webhooks gmail setup --account <Gmail>` |
+| 需要公网 push 但 Tailscale 起不来 | 无公网入口 | 用 cloudflared（3.2 方案 B） |
+| 端口 8788 占用 | serve 起不来 | 关闭重复的 `gog gmail watch serve` 或设 `OPENCLAW_SKIP_GMAIL_WATCHER=1` |
 
 ---
 
-## 9. 附：验证脚本（保留）
+## 9. 附：验证与诊断脚本
 
+- `doc/sum/scripts/gmail-push-expose.sh`：**本地内网穿透 + Gmail setup 一键脚本**（Tailscale 或 cloudflared）
+- `doc/sum/scripts/verify-gmail-hook-to-feishu.sh`：模拟 POST /hooks/gmail，验证 OpenClaw→飞书 是否正常
+- `doc/sum/scripts/diagnose-gmail-to-feishu.sh`：**深度诊断** Gmail→飞书 全链路（配置、Push 可达性、进程、日志）
 - `doc/sum/scripts/verify-gmail-webhook.sh`：发测试邮件 + 提示如何查日志
 - `doc/sum/scripts/verify-gmail-webhook-feishu.sh`：端到端验证（发信 + 查 hook/飞书投递日志）
 

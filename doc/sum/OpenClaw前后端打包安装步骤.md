@@ -56,6 +56,12 @@ pnpm build        # 仅后端
 pnpm ui:build     # 仅 Control UI（会写入 dist/control-ui）
 ```
 
+**网页端提示「Control UI assets not found」时**：二选一：  
+① 在 `openclaw-src` 下执行 `pnpm ui:build`，然后**重启 Gateway**；  
+② 或直接在配置里指定 UI 路径（适合用源码运行 Gateway 的情况）：在 `~/.openclaw/openclaw.json` 的 `gateway` 下增加 `"controlUi": { "root": "/绝对路径/openclaw-src/dist/control-ui" }`，再重启 Gateway。
+
+**网页端打开后显示「gateway token missing」/ 未连接**：在 Dashboard 左侧点 **Overview**，在「Gateway URL」和「Token」中填入本机网关地址（如 `http://127.0.0.1:18789`）和 `gateway.auth.token`（与 `~/.openclaw/openclaw.json` 中一致），点击 **Connect**。
+
 ### 3.3 全局安装
 
 使用上一步生成的 tgz 进行全局安装（以版本 2026.2.12 为例，请按实际文件名替换）：

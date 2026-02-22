@@ -16,9 +16,18 @@ if [ -z "$ACCOUNT" ] || [ "$ACCOUNT" = "lifeng.zhan90@gmail.com" ]; then
 fi
 [ -z "$ACCOUNT" ] && ACCOUNT="lifeng.zhan90@gmail.com"
 
+# 使用 OPENCLAW_AGENT，否则用 agents list 中的 default，再否则 main
+AGENT="${OPENCLAW_AGENT:-}"
+if [ -z "$AGENT" ]; then
+  AGENT=$(openclaw agents list 2>/dev/null | sed -n 's/^- \([a-zA-Z0-9-]*\) (default).*/\1/p' | head -1)
+  [ -z "$AGENT" ] && AGENT=$(openclaw agents list 2>/dev/null | sed -n 's/^- \([a-zA-Z0-9-]*\).*/\1/p' | head -1)
+  [ -z "$AGENT" ] && AGENT="main"
+fi
+echo "  (agent: $AGENT)"
+
 echo "=== 1. 通过 openclaw agent 发送验证邮件（gmail_send）==="
 # 使用字面邮箱避免 shell 展开问题
-OUT1=$(openclaw agent --agent main --local --session-id "${SID}-send" --message '请使用 gmail_send 工具发一封邮件到 lifeng.zhan90@gmail.com，主题写「OpenClaw agent 验证」，正文写「步骤1：发信验证成功。」' 2>&1) || true
+OUT1=$(openclaw agent --agent "$AGENT" --local --session-id "${SID}-send" --message '请使用 gmail_send 工具发一封邮件到 lifeng.zhan90@gmail.com，主题写「OpenClaw agent 验证」，正文写「步骤1：发信验证成功。」' 2>&1) || true
 if echo "$OUT1" | grep -qE "Message-ID|message_id|发送成功|发送至"; then
   echo "  [OK] gmail_send 已通过 agent 执行成功"
   SEND_OK=1
@@ -30,7 +39,7 @@ fi
 
 echo ""
 echo "=== 2. 通过 openclaw agent 读取收件箱（gmail_list）==="
-OUT2=$(openclaw agent --agent main --local --session-id "${SID}-read" --message "请调用 gmail_list 工具，参数 query=in:inbox，max=3，并把返回结果里的每封邮件的 from 和 subject 列出来。" 2>&1) || true
+OUT2=$(openclaw agent --agent "$AGENT" --local --session-id "${SID}-read" --message "请调用 gmail_list 工具，参数 query=in:inbox，max=3，并把返回结果里的每封邮件的 from 和 subject 列出来。" 2>&1) || true
 if echo "$OUT2" | grep -qE '"messages"|"from"|"subject"|gmail_list.*ok|count.*[1-9]'; then
   echo "  [OK] gmail_list 已通过 agent 执行并返回邮件列表"
   READ_OK=1
